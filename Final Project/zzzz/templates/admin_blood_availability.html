@@ -1,0 +1,71 @@
+{% extends 'admin_base.html' %}
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow-lg border-0">
+                <div class="card-header bg-gradient bg-primary text-white text-center">
+                    <h3 class="mb-0">Blood Inventory Management</h3>
+                </div>
+                <div class="card-body p-4">
+                    <form id="blood-inventory-form">
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-hover text-center align-middle mb-0 bg-white">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Blood Group</th>
+                                        <th>Units Available</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for bg in ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] %}
+                                    <tr>
+                                        <td><span class="badge bg-danger fs-5">{{ bg }}</span></td>
+                                        <td>
+                                            <input type="number" class="form-control text-center fw-bold" id="{{ bg }}" name="{{ bg }}" min="0" value="{{ blood_inventory[bg] }}">
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="mt-4 text-end">
+                            <button type="submit" class="btn btn-primary btn-lg px-4">Save Inventory</button>
+                        </div>
+                        <div id="inventory-message" class="mt-3"></div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    document.getElementById('blood-inventory-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const form = e.target;
+        const data = {};
+        ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].forEach(bg => {
+            data[bg] = form[bg].value;
+        });
+        fetch("{{ url_for('update_blood_inventory') }}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => response.json())
+        .then(result => {
+            const msgDiv = document.getElementById('inventory-message');
+            if (result.success) {
+                msgDiv.innerHTML = `<div class='alert alert-success'>${result.message}</div>`;
+            } else {
+                msgDiv.innerHTML = `<div class='alert alert-danger'>${result.error || 'Update failed'}</div>`;
+            }
+        })
+        .catch(() => {
+            document.getElementById('inventory-message').innerHTML = `<div class='alert alert-danger'>An error occurred.</div>`;
+        });
+    });
+</script>
+{% endblock %} 

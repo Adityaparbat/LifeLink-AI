@@ -1,8 +1,10 @@
 # Python
 __pycache__/
 *.py[cod]
+.pytest_cache/
 *$py.class
 *.so
+pyvenv.cfg
 .Python
 env/
 build/
@@ -30,10 +32,11 @@ ENV/
 .vscode/
 *.swp
 *.swo
-
+app.log
 # Environment variables
 .env
-
+twilio.env
+openai.env
 # Secure files
 secure/
 *.pem

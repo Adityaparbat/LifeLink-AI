@@ -2400,102 +2400,283 @@ def get_pending_requests():
         return jsonify({'error': 'Not authorized'}), 401
         
     try:
-        # Get all pending blood requests for the user
+        # Get pending requests for the user
         pending_requests = list(notifications.find({
             'user_id': session['user'],
             'type': 'blood_request',
             'status': 'pending'
         }).sort('created_at', -1))
         
-        # Get admin details for each request
-        for request in pending_requests:
-            admin = admins.find_one({'_id': ObjectId(request['admin_id'])})
+        # Format requests
+        formatted_requests = []
+        for req in pending_requests:
+            # Get admin details
+            admin = admins.find_one({'_id': ObjectId(req['admin_id'])})
+            admin_details = {}
             if admin:
-                request['admin_details'] = {
-                    'name': admin.get('hospital_name', 'Hospital'),
-                    'address': admin.get('address', 'Address not available'),
-                    'phone': admin.get('phone', 'N/A'),
-                    'hospital_id': admin.get('hospital_id', 'N/A')
+                admin_details = {
+                    'name': admin.get('hospital_name', 'Unknown Hospital'),
+                    'address': admin.get('address', 'N/A'),
+                    'phone': admin.get('phone', 'N/A')
                 }
+                
+            formatted_requests.append({
+                'request_id': req['request_id'],
+                'created_at': req['created_at'].strftime('%Y-%m-%d %H:%M:%S'),
+                'data': req.get('data', {}),
+                'admin_details': admin_details
+            })
             
-            # Convert ObjectId to string for JSON serialization
-            request['_id'] = str(request['_id'])
-            request['created_at'] = request['created_at'].strftime('%Y-%m-%d %H:%M:%S')
-        
         return jsonify({
             'success': True,
-            'requests': pending_requests
+            'requests': formatted_requests
         })
         
     except Exception as e:
         print(f"Error getting pending requests: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-# Add new route to get user's blood request history
 @app.route('/user/request_history', methods=['GET'])
 def get_request_history():
     if 'user' not in session:
         return jsonify({'error': 'Not authorized'}), 401
         
     try:
-        # Get all blood requests for the user (both pending and responded)
-        all_requests = list(notifications.find({
+        # Get request history (responded requests)
+        history = list(notifications.find({
             'user_id': session['user'],
-            'type': 'blood_request'
+            'type': 'blood_request',
+            'status': {'$in': ['responded', 'selected', 'rejected']}
         }).sort('created_at', -1))
         
-        # Get admin details for each request
-        for request in all_requests:
-            try:
-                # Check if admin_id exists and is valid
-                if 'admin_id' in request and request['admin_id']:
-                    admin = admins.find_one({'_id': ObjectId(request['admin_id'])})
-                    if admin:
-                        request['admin_details'] = {
-                            'name': admin.get('hospital_name', 'Hospital'),
-                            'address': admin.get('address', 'Address not available'),
-                            'phone': admin.get('phone', 'N/A'),
-                            'hospital_id': admin.get('hospital_id', 'N/A')
-                        }
-                    else:
-                        request['admin_details'] = {
-                            'name': 'Unknown Hospital',
-                            'address': 'Address not available',
-                            'phone': 'N/A',
-                            'hospital_id': 'N/A'
-                        }
-                else:
-                    request['admin_details'] = {
-                        'name': 'Unknown Hospital',
-                        'address': 'Address not available',
-                        'phone': 'N/A',
-                        'hospital_id': 'N/A'
-                    }
-                
-                # Convert ObjectId to string and format dates for JSON serialization
-                request['_id'] = str(request['_id'])
-                request['created_at'] = request['created_at'].strftime('%Y-%m-%d %H:%M:%S')
-                if request.get('response_time'):
-                    request['response_time'] = request['response_time'].strftime('%Y-%m-%d %H:%M:%S')
-                
-            except Exception as e:
-                print(f"Error processing request {request.get('_id')}: {str(e)}")
-                request['admin_details'] = {
-                    'name': 'Unknown Hospital',
-                    'address': 'Address not available',
-                    'phone': 'N/A',
-                    'hospital_id': 'N/A'
+        # Format requests
+        formatted_history = []
+        for req in history:
+            # Get admin details
+            admin = admins.find_one({'_id': ObjectId(req.get('admin_id'))}) if req.get('admin_id') else None
+            admin_details = {}
+            if admin:
+                admin_details = {
+                    'name': admin.get('hospital_name', 'Unknown Hospital'),
+                    'address': admin.get('address', 'N/A'),
+                    'phone': admin.get('phone', 'N/A')
                 }
-                continue
-        
+                
+            formatted_history.append({
+                'request_id': req['request_id'],
+                'created_at': req['created_at'].strftime('%Y-%m-%d %H:%M:%S'),
+                'response_time': req.get('response_time').strftime('%Y-%m-%d %H:%M:%S') if req.get('response_time') else None,
+                'status': req['status'],
+                'response': req.get('response'),
+                'data': req.get('data', {}),
+                'admin_details': admin_details
+            })
+            
         return jsonify({
             'success': True,
-            'requests': all_requests
+            'requests': formatted_history
         })
         
     except Exception as e:
         print(f"Error getting request history: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+@app.route('/user/stats', methods=['GET'])
+def get_user_stats():
+    if 'user' not in session:
+        return jsonify({'error': 'Not authorized'}), 401
+        
+    try:
+        user = users.find_one({'_id': ObjectId(session['user'])})
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+            
+        # Calculate stats
+        total_donations = donation_history.count_documents({'user_id': session['user']})
+        
+        last_donation = user.get('last_donation_date')
+        if last_donation:
+            if isinstance(last_donation, str):
+                last_donation = datetime.fromisoformat(last_donation.replace('Z', '+00:00'))
+            last_donation_str = last_donation.strftime('%Y-%m-%d')
+            
+            # Calculate next eligible date
+            next_eligible = last_donation + timedelta(days=90)
+            next_eligible_str = next_eligible.strftime('%Y-%m-%d')
+        else:
+            last_donation_str = 'Never'
+            next_eligible_str = 'Now'
+            
+        return jsonify({
+            'success': True,
+            'stats': {
+                'total_donations': total_donations,
+                'last_donation': last_donation_str,
+                'next_eligible': next_eligible_str
+            }
+        })
+        
+    except Exception as e:
+        print(f"Error getting user stats: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/user/upcoming_camps', methods=['GET'])
+def get_upcoming_camps():
+    if 'user' not in session:
+        return jsonify({'error': 'Not authorized'}), 401
+        
+    try:
+        user = users.find_one({'_id': ObjectId(session['user'])})
+        if not user or 'location' not in user:
+            return jsonify({'success': True, 'camps': []})
+            
+        # Find camps near user
+        camps = list(admins.find({
+            'location': {
+                '$near': {
+                    '$geometry': {
+                        'type': 'Point',
+                        'coordinates': user['location']['coordinates']
+                    },
+                    '$maxDistance': 20000  # 20km
+                }
+            },
+            'hospital_id': {'$ne': 'ADMIN001'}  # Exclude system admin
+        }).limit(5))
+        
+        formatted_camps = []
+        for camp in camps:
+            formatted_camps.append({
+                'name': camp.get('hospital_name', 'Blood Camp'),
+                'date': 'Ongoing',  # Placeholder
+                'location': camp.get('address', 'Location not available')
+            })
+            
+        return jsonify({
+            'success': True,
+            'camps': formatted_camps
+        })
+        
+    except Exception as e:
+        print(f"Error getting upcoming camps: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+# Add new route for tracking requests
+@app.route('/admin/track_requests')
+@admin_required
+def track_requests():
+    try:
+        # Get all accepted requests for this admin
+        accepted_requests = list(notifications.find({
+            'admin_id': str(session['admin']),
+            'type': 'blood_request',
+            'status': {'$in': ['responded', 'selected']},
+            'response': 'accepted'
+        }).sort('response_time', -1))
+        
+        tracking_data = []
+        for req in accepted_requests:
+            user = users.find_one({'_id': ObjectId(req['user_id'])})
+            if user:
+                # Get route info if available
+                route = db.donor_routes.find_one({'request_id': req['request_id']})
+                tracking = db.donor_tracking.find_one({'request_id': req['request_id']})
+                
+                arrival_time = 'Calculating...'
+                if route and 'estimated_arrival' in route:
+                    try:
+                        est_time = datetime.fromisoformat(route['estimated_arrival'].replace('Z', '+00:00'))
+                        arrival_time = est_time.strftime('%H:%M %p')
+                    except:
+                        pass
+                
+                status = 'Accepted'
+                if req.get('status') == 'selected':
+                    status = 'Selected'
+                elif tracking and tracking.get('status') == 'arrived':
+                    status = 'Arrived'
+                
+                tracking_data.append({
+                    'request_id': req['request_id'],
+                    'user_id': str(user['_id']),
+                    'user_name': user['name'],
+                    'hospital_name': req.get('data', {}).get('hospital_name', 'N/A'),
+                    'blood_group': req.get('data', {}).get('blood_group_needed', 'N/A'),
+                    'arrival_time': arrival_time,
+                    'status': status,
+                    'phone': user.get('phone', 'N/A')
+                })
+                
+        return render_template('admin_track_requests.html', requests=tracking_data)
+        
+    except Exception as e:
+        print(f"Error in track_requests: {str(e)}")
+        flash('Error loading tracking data')
+        return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/mark_arrival/<request_id>', methods=['POST'])
+@admin_required
+def mark_arrival_route(request_id):
+    try:
+        if AGENTS_ENABLED:
+            from agents.pathfinder_agent import mark_arrival
+            result = mark_arrival(request_id)
+            if isinstance(result, dict) and not result.get('success'):
+                 # Fallback if agent returns error or simple dict
+                 pass
+        
+        # Update local status as well to be sure
+        notifications.update_one(
+            {'request_id': request_id},
+            {'$set': {'status': 'selected'}} # Or keep as responded but mark arrival in tracking
+        )
+        
+        # Also update tracking directly if agent didn't
+        db.donor_tracking.update_one(
+            {'request_id': request_id},
+            {'$set': {
+                'status': 'arrived',
+                'actual_arrival': datetime.now(UTC)
+            }},
+            upsert=True
+        )
+        
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/admin/mark_unsuccessful/<request_id>', methods=['POST'])
+@admin_required
+def mark_unsuccessful(request_id):
+    try:
+        # Update notification status
+        notifications.update_one(
+            {'request_id': request_id},
+            {'$set': {
+                'status': 'failed',
+                'failure_reason': 'Did not arrive',
+                'failure_time': datetime.now(UTC)
+            }}
+        )
+        
+        # Update tracking status
+        db.donor_tracking.update_one(
+            {'request_id': request_id},
+            {'$set': {
+                'status': 'failed',
+                'failure_reason': 'Did not arrive',
+                'last_updated': datetime.now(UTC)
+            }},
+            upsert=True
+        )
+        
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+        
+
+
+
 
 @app.route('/admin/acceptance')
 @admin_required
@@ -3064,89 +3245,7 @@ def update_location():
         print(f"Unexpected error: {str(e)}")
         return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500
 
-@app.route('/user/stats')
-def get_user_stats():
-    if 'user' not in session:
-        return jsonify({'error': 'Not authorized'}), 401
-        
-    try:
-        user_id = session['user']
-        user = users.find_one({'_id': ObjectId(user_id)})
-        
-        if not user:
-            return jsonify({'error': 'User not found'}), 404
-            
-        # Get donation history
-        donations = list(donation_history.find({'user_id': user_id}).sort('donation_date', -1))
-        
-        # Calculate stats
-        total_donations = len(donations)
-        last_donation = donations[0]['donation_date'].strftime('%Y-%m-%d') if donations else None
-        
-        # Calculate next eligible date
-        next_eligible = None
-        if last_donation:
-            last_donation_date = donations[0]['donation_date']
-            next_eligible_date = last_donation_date + timedelta(days=90)
-            if datetime.now(UTC) < next_eligible_date:
-                next_eligible = next_eligible_date.strftime('%Y-%m-%d')
-            else:
-                next_eligible = 'Now'
-        
-        return jsonify({
-            'success': True,
-            'stats': {
-                'total_donations': total_donations,
-                'last_donation': last_donation,
-                'next_eligible': next_eligible
-            }
-        })
-        
-    except Exception as e:
-        print(f"Error getting user stats: {str(e)}")
-        return jsonify({'error': str(e)}), 500
 
-@app.route('/user/upcoming_camps')
-def get_upcoming_camps():
-    if 'user' not in session:
-        return jsonify({'error': 'Not authorized'}), 401
-        
-    try:
-        # Get user's location
-        user = users.find_one({'_id': ObjectId(session['user'])})
-        if not user or 'location' not in user:
-            return jsonify({'error': 'User location not found'}), 404
-            
-        user_lat = user['location']['coordinates'][1]
-        user_lng = user['location']['coordinates'][0]
-        
-        # Get all blood camps within 10km
-        camps = []
-        for admin in admins.find():
-            if 'location' not in admin:
-                continue
-                
-            admin_lat = admin['location']['coordinates'][1]
-            admin_lon = admin['location']['coordinates'][0]
-            
-            # Calculate distance
-            distance = haversine_distance(user_lat, user_lng, admin_lat, admin_lon)
-            
-            if distance <= 10:  # Within 10km
-                camps.append({
-                    'name': admin['hospital_name'],
-                    'date': (datetime.now(UTC) + timedelta(days=7)).strftime('%Y-%m-%d'),  # Example: 7 days from now
-                    'location': admin['address']
-                })
-        
-        return jsonify({
-            'success': True,
-            'camps': camps
-        })
-        
-    except Exception as e:
-        print(f"Error getting upcoming camps: {str(e)}")
-        return jsonify({'error': str(e)}), 500
 
 @app.route('/user/blood_donation_form/<request_id>')
 def blood_donation_form(request_id):

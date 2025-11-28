@@ -43,7 +43,7 @@ celery_app.conf.beat_schedule = {
     # AutoPulse Agent: Check inventory every 15 minutes
     'autopulse-inventory-check': {
         'task': 'agents.autopulse_agent.monitor_inventory',
-        'schedule': crontab(minute='*/15'),  # Every 15 minutes
+        'schedule': crontab(minute='*/3'),  # Every 15 minutes
     },
     
     # AutoPulse Agent: Predict shortages daily at 6 AM
@@ -58,19 +58,7 @@ celery_app.conf.beat_schedule = {
         'schedule': crontab(minute='*/5'),  # Every 5 minutes
     },
     
-    # PathFinder Agent: Update routes every 10 minutes
-    'pathfinder-update-routes': {
-        'task': 'agents.pathfinder_agent.update_active_routes',
-        'schedule': crontab(minute='*/10'),  # Every 10 minutes
-    },
-    
-    # LinkBridge Agent: Check nearby hospitals every 30 minutes
-    'linkbridge-check-hospitals': {
-        'task': 'agents.linkbridge_agent.check_nearby_stock',
-        'schedule': crontab(minute='*/30'),  # Every 30 minutes
-    },
 }
 
 if __name__ == '__main__':
     celery_app.start()
-

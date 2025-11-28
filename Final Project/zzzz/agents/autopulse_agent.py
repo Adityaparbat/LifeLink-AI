@@ -17,13 +17,15 @@ logger = logging.getLogger(__name__)
 class AutoPulseAgent(BaseAgent):
     """Agent that monitors inventory and automatically contacts donors when stock is low"""
     
-    def __init__(self):
+    def __init__(self, orchestrator=None):
         super().__init__("AutoPulse")
         self.inventory_thresholds = {
             'A+': 10, 'A-': 5, 'B+': 10, 'B-': 5,
             'AB+': 5, 'AB-': 3, 'O+': 15, 'O-': 8
         }
+        self.rare_blood_groups = {'O-', 'AB-', 'B-', 'A-'}
         self.twilio_client = None
+        self.orchestrator = orchestrator
         self._init_twilio()
     
     def _init_twilio(self):
@@ -127,13 +129,21 @@ class AutoPulseAgent(BaseAgent):
                         'deficit': threshold - current_stock
                     })
             
-            # Auto-contact donors for all low groups
+            # Auto-contact donors for all low groups via orchestrator.
+            # For Celery/background runs where no orchestrator was injected,
+            # lazily import the global orchestrator to avoid circular imports.
+            from .agent_orchestrator import orchestrator as global_orchestrator
+            active_orchestrator = self.orchestrator or global_orchestrator
+
             for group in low_stock_groups:
-                self._auto_contact_donors(
+                self.logger.info(f"[AUTOPULSE] Low stock detected: {group['blood_group']} (current: {group['current']}, threshold: {group['threshold']}, deficit: {group['deficit']})")
+                self.logger.info(f"[AUTOPULSE] Invoking orchestrator.handle_low_inventory for hospital_id={admin_id}, blood_group={group['blood_group']}, units_needed={group['deficit']}")
+                active_orchestrator.handle_low_inventory(
                     admin_id,
                     group["blood_group"],
                     group["deficit"]
                 )
+                self.logger.info(f"[AUTOPULSE] Orchestrator.handle_low_inventory completed for {group['blood_group']}")
             
             # Log action
             if low_stock_groups:
@@ -165,6 +175,8 @@ class AutoPulseAgent(BaseAgent):
             
             admin_lat = float(admin['location']['coordinates'][1])
             admin_lon = float(admin['location']['coordinates'][0])
+            units_requested = max(1, int(units_needed))
+            is_rare_group = blood_group in self.rare_blood_groups
 
             # ---- FETCH DONORS FROM CORRECT COLLECTION ----
             donors_cursor = self.db.users.find({
@@ -195,6 +207,19 @@ class AutoPulseAgent(BaseAgent):
             # Notify donors
             for donor in donors_to_contact:
                 request_id = str(ObjectId())
+                notification_data = {
+                    "blood_group_needed": blood_group,
+                    "units_needed": units_requested,
+                    "hospital_id": str(admin.get("_id")),
+                    "hospital_name": admin.get("hospital_name", "Hospital"),
+                    "deficit": units_requested,
+                    "rare": is_rare_group,
+                    "source": "autopulse_agent",
+                    "location": {
+                        "latitude": admin_lat,
+                        "longitude": admin_lon
+                    }
+                }
 
                 notification = {
                     "user_id": donor['id'],
@@ -203,22 +228,25 @@ class AutoPulseAgent(BaseAgent):
                     "hospital_address": admin.get("address", ""),
                     "hospital_phone": admin.get("phone", ""),
                     "type": "blood_request",
-                    "priority": "high",
+                    "priority": "critical" if is_rare_group else "high",
                     "blood_group_needed": blood_group,
+                    "units_needed": units_requested,
                     "hospital_id": admin.get("_id"),
                     "distance": round(donor["distance"], 2),
                     "message": f"""
-    🚨 URGENT BLOOD DONATION REQUEST 🚨
+                    🚨 URGENT BLOOD DONATION REQUEST 🚨
 
-    Dear Blood Donor,
+                    Dear Blood Donor,
 
-    {admin.get("hospital_name", "Hospital")} urgently needs {blood_group} blood.
-    Current stock is critically low.
+                    {admin.get("hospital_name", "Hospital")} urgently needs {blood_group} blood.
+                    Current stock is critically low.
 
-    Distance from you: {round(donor["distance"],2)} KM
-    """,
+                    Distance from you: {round(donor["distance"],2)} KM
+                    """,
                     "created_at": datetime.now(timezone.utc),
-                    "read": False
+                    "read": False,
+                    "status": "pending",
+                    "data": notification_data
                 }
 
                 # Check if similar pending notification exists
@@ -238,6 +266,8 @@ class AutoPulseAgent(BaseAgent):
                     # Optional — voice call
                     if self.twilio_client:
                         self._make_voice_call(donor['phone'], admin_id, request_id)
+                else:
+                    self.logger.info(f"Existing notification found: {existing}")
 
             self.log_action('auto_contacted_donors', {
                 'hospital_id': admin_id,

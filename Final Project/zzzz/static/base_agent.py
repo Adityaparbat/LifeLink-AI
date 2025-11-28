@@ -8,10 +8,11 @@ import os
 from dotenv import load_dotenv
 from pathlib import Path
 import logging
-import certifi
 
-# Load .env from project root (zzzz directory)
+# Load .env file from the project root (zzzz directory)
+# Get the directory where this file is located
 _current_dir = Path(__file__).resolve().parent
+# Go up one level to get to zzzz directory
 _project_root = _current_dir.parent
 _env_path = _project_root / '.env'
 load_dotenv(_env_path)
@@ -22,32 +23,32 @@ logger = logging.getLogger(__name__)
 class BaseAgent(ABC):
     """Base class for all agents in the system"""
     
-    def __init__(self, name: str):
-        self.name = name  # ✅ Now properly set on the main class
-        self.logger = logging.getLogger(f"agent.{name}")
+    def __init__(self, agent_name: str):
+        self.agent_name = agent_name
+        self.db = self._connect_db()
+        self.logger = logging.getLogger(f"{__name__}.{agent_name}")
         
-        # Connect to MongoDB
-        # Connect to MongoDB
-        mongo_uri = os.getenv(
-            "MONGODB_URI", 
-            "mongodb+srv://donate-blood:jspmdonate@cluster0.evglf.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
-        )
-        
-        import time
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                self.client = MongoClient(mongo_uri, tlsCAFile=certifi.where(), serverSelectionTimeoutMS=30000)
-                # Trigger a connection to verify
-                self.client.admin.command('ping')
-                self.db = self.client.get_database(os.getenv("MONGO_DB", "lifelink"))
-                break
-            except Exception as e:
-                if attempt == max_retries - 1:
-                    self.logger.error(f"Failed to connect to MongoDB after {max_retries} attempts: {str(e)}")
-                    raise e
-                self.logger.warning(f"Connection attempt {attempt + 1} failed: {str(e)}. Retrying in 2s...")
-                time.sleep(2)
+    def _connect_db(self):
+        """Connect to MongoDB"""
+        try:
+            mongodb_uri = os.getenv('MONGODB_URI')
+            if not mongodb_uri:
+                raise ValueError("MONGODB_URI not found in environment variables. Please check your .env file.")
+            
+            # Log the connection attempt (without sensitive info)
+            logger.info(f"Connecting to MongoDB... URI starts with: {mongodb_uri[:30]}...")
+            
+            client = MongoClient(mongodb_uri)
+            db = client.blood_donation
+            
+            # Test the connection
+            client.admin.command('ping')
+            logger.info("Successfully connected to MongoDB")
+            
+            return db
+        except Exception as e:
+            logger.error(f"Failed to connect to MongoDB: {str(e)}")
+            raise
     
     @abstractmethod
     def execute(self, *args, **kwargs):
@@ -57,7 +58,7 @@ class BaseAgent(ABC):
     def log_action(self, action: str, details: dict = None):
         """Log agent actions"""
         log_entry = {
-            'agent': self.name,  # ✅ was `self.agent_name` — typo!
+            'agent': self.agent_name,
             'action': action,
             'timestamp': datetime.now(timezone.utc),
             'details': details or {}
@@ -88,6 +89,7 @@ class BaseAgent(ABC):
                           blood_group: str, max_distance_km: float = 10):
         """Find nearby donors matching blood group"""
         try:
+            # Get all donors with matching blood group
             donors = list(self.db.users.find({'blood_group': blood_group}))
             matching_donors = []
             
@@ -99,11 +101,13 @@ class BaseAgent(ABC):
                 donor_lat = float(donor_coords[1])
                 donor_lon = float(donor_coords[0])
                 
+                # Calculate distance using Haversine formula
                 distance = self._haversine_distance(
                     latitude, longitude, donor_lat, donor_lon
                 )
                 
                 if distance <= max_distance_km:
+                    # Check if donor is eligible (not in cooldown)
                     if self._is_eligible_donor(donor):
                         matching_donors.append({
                             'id': str(donor['_id']),
@@ -116,6 +120,7 @@ class BaseAgent(ABC):
                             'blood_group': donor.get('blood_group')
                         })
             
+            # Sort by distance
             matching_donors.sort(key=lambda x: x['distance'])
             return matching_donors
             
@@ -162,4 +167,5 @@ class BaseAgent(ABC):
             return current_time >= cooldown_end
         except Exception as e:
             self.logger.warning(f"Error checking eligibility: {str(e)}")
-            return True
+            return True  # Assume eligible if check fails
+

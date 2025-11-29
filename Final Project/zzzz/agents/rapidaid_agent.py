@@ -474,7 +474,19 @@ class RapidAidAgent(BaseAgent):
                 casualties = int(payload.get("human_casualties_estimate") or 0)
                 loc_name = (payload.get("location_name") or "").strip()
                 suggested_bg = payload.get("suggested_blood_group") or None
-                confidence = float(payload.get("confidence") or 0.0)
+                
+                # Handle confidence - may be string or number
+                confidence_val = payload.get("confidence") or 0.0
+                if isinstance(confidence_val, str):
+                    # Map string confidence to numeric values
+                    confidence_map = {"high": 0.8, "medium": 0.6, "low": 0.3, "critical": 0.95}
+                    confidence = confidence_map.get(confidence_val.lower(), 0.5)
+                else:
+                    try:
+                        confidence = float(confidence_val)
+                    except (ValueError, TypeError):
+                        confidence = 0.5
+                
                 notes = payload.get("notes", "")
 
                 # Severity
@@ -501,7 +513,8 @@ class RapidAidAgent(BaseAgent):
                 # Geocode
                 lat, lon = geocode_place(loc_name) if loc_name else (None, None)
 
-                if lat is None or lon is None and severity == "low":
+                # Skip if no location and severity is low (parentheses fix logic error)
+                if (lat is None or lon is None) and severity == "low":
                     continue
 
                 emergency_item = {

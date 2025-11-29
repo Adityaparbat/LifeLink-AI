@@ -11,11 +11,18 @@ users = db.users
 def find_nearby_donors(latitude, longitude, blood_group, max_distance_km=10):
     """
     Find donors within specified distance and matching blood group
+    Excludes blocked users
     """
     print(f"\nSearching for {blood_group} donors within {max_distance_km}km...")
     
-    # Get all donors with matching blood group
-    donors = users.find({"blood_group": blood_group})
+    # Get all donors with matching blood group who are NOT blocked
+    donors = users.find({
+        "blood_group": blood_group,
+        "$or": [
+            {"blocked": {"$exists": False}},  # User doesn't have blocked field
+            {"blocked": False}  # User is explicitly not blocked
+        ]
+    })
     
     # Reference point (searcher's location)
     ref_point = (latitude, longitude)

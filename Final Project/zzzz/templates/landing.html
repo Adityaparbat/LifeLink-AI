@@ -21,40 +21,103 @@
                 </div>
             </div>
             <div class="col-md-6">
-                <img src="{{ url_for('static', filename='images/hero-image.png') }}" alt="Blood Donation" class="img-fluid">
+                <img src="{{ url_for('static', filename='images/hero-image.png') }}" alt="Blood Donation"
+                    class="img-fluid">
             </div>
         </div>
     </div>
 </div>
 
-<!-- Features Section -->
+<!-- AI-Powered Features Section -->
 <div class="container py-5">
-    <h2 class="text-center mb-5">{{ translations.features_title }}</h2>
+    <div class="text-center mb-5" data-aos="fade-up">
+        <span class="feature-badge">AI-Powered Platform</span>
+        <h2 class="display-5 fw-bold mt-3">Meet Our Intelligent Agents</h2>
+        <p class="lead text-muted">Advanced AI working 24/7 to save lives</p>
+    </div>
     <div class="row g-4">
-        <div class="col-md-4">
-            <div class="card h-100">
-                <div class="card-body text-center">
-                    <i class="fas fa-heartbeat fa-3x text-danger mb-3"></i>
-                    <h5 class="card-title">Save Lives</h5>
-                    <p class="card-text">Your blood donation can save up to three lives. Every drop counts!</p>
+        <div class="col-lg-3 col-md-6" data-aos="fade-up" data-aos-delay="100">
+            <div class="feature-card">
+                <div class="feature-icon-wrapper autopulse">
+                    <i class="fas fa-heartbeat fa-2x"></i>
                 </div>
+                <h5 class="fw-bold mt-3">AutoPulse</h5>
+                <p class="text-muted">Monitors inventory and automatically contacts eligible donors when blood is
+                    critically low</p>
+                <div class="feature-badge-small">Smart Monitoring</div>
             </div>
         </div>
-        <div class="col-md-4">
-            <div class="card h-100">
-                <div class="card-body text-center">
-                    <i class="fas fa-map-marker-alt fa-3x text-danger mb-3"></i>
-                    <h5 class="card-title">Find Donors</h5>
-                    <p class="card-text">Quickly locate blood donors in your area when needed.</p>
+        <div class="col-lg-3 col-md-6" data-aos="fade-up" data-aos-delay="200">
+            <div class="feature-card">
+                <div class="feature-icon-wrapper rapidaid">
+                    <i class="fas fa-bolt fa-2x"></i>
                 </div>
+                <h5 class="fw-bold mt-3">RapidAid</h5>
+                <p class="text-muted">Detects emergencies from news and instantly activates nearby donor networks</p>
+                <div class="feature-badge-small">Emergency Response</div>
             </div>
         </div>
-        <div class="col-md-4">
-            <div class="card h-100">
-                <div class="card-body text-center">
-                    <i class="fas fa-bell fa-3x text-danger mb-3"></i>
-                    <h5 class="card-title">Get Notified</h5>
-                    <p class="card-text">Receive alerts when your blood type is needed nearby.</p>
+        <div class="col-lg-3 col-md-6" data-aos="fade-up" data-aos-delay="300">
+            <div class="feature-card">
+                <div class="feature-icon-wrapper pathfinder">
+                    <i class="fas fa-route fa-2x"></i>
+                </div>
+                <h5 class="fw-bold mt-3">PathFinder</h5>
+                <p class="text-muted">Plans optimal routes and tracks donors with real-time ETA updates</p>
+                <div class="feature-badge-small">Live Tracking</div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6" data-aos="fade-up" data-aos-delay="400">
+            <div class="feature-card">
+                <div class="feature-icon-wrapper linkbridge">
+                    <i class="fas fa-network-wired fa-2x"></i>
+                </div>
+                <h5 class="fw-bold mt-3">LinkBridge</h5>
+                <p class="text-muted">Coordinates inter-hospital transfers and manages inventory sharing</p>
+                <div class="feature-badge-small">Network Coordination</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Smart Features Section -->
+<div class="bg-light py-5 position-relative overflow-hidden">
+    <div class="floating-shapes">
+        <div class="shape shape-1"></div>
+        <div class="shape shape-2"></div>
+        <div class="shape shape-3"></div>
+    </div>
+    <div class="container position-relative">
+        <div class="text-center mb-5" data-aos="fade-up">
+            <h2 class="display-5 fw-bold">Smart Features</h2>
+            <p class="lead text-muted">Everything you need for efficient blood donation</p>
+        </div>
+        <div class="row g-4">
+            <div class="col-md-4" data-aos="zoom-in" data-aos-delay="100">
+                <div class="smart-feature-card">
+                    <div class="smart-icon">
+                        <i class="fas fa-map-marked-alt fa-2x text-danger"></i>
+                    </div>
+                    <h5 class="fw-bold">Location Matching</h5>
+                    <p class="text-muted">AI finds nearest donors within seconds using geolocation</p>
+                </div>
+            </div>
+            <div class="col-md-4" data-aos="zoom-in" data-aos-delay="200">
+                <div class="smart-feature-card">
+                    <div class="smart-icon">
+                        <i class="fas fa-mobile-alt fa-2x text-danger"></i>
+                    </div>
+                    <h5 class="fw-bold">Multi-Channel Alerts</h5>
+                    <p class="text-muted">SMS, WhatsApp, and in-app notifications ensure you never miss a request</p>
+                </div>
+            </div>
+            <div class="col-md-4" data-aos="zoom-in" data-aos-delay="300">
+                <div class="smart-feature-card">
+                    <div class="smart-icon">
+                        <i class="fas fa-shield-alt fa-2x text-danger"></i>
+                    </div>
+                    <h5 class="fw-bold">Medical Screening</h5>
+                    <p class="text-muted">Automated health checks and blacklist management for safe donations</p>
                 </div>
             </div>
         </div>
@@ -62,83 +125,310 @@
 </div>
 
 <!-- How It Works Section -->
-<div class="bg-light py-5">
-    <div class="container">
-        <h2 class="text-center mb-5">{{ translations.how_it_works }}</h2>
-        <div class="row">
-            <div class="col-md-3 text-center">
-                <div class="step-number">1</div>
-                <h5>Register</h5>
-                <p>Create your account and provide your details</p>
+<div class="container py-5">
+    <div class="text-center mb-5" data-aos="fade-up">
+        <h2 class="display-5 fw-bold">How It Works</h2>
+        <p class="lead text-muted">Simple steps to start saving lives</p>
+    </div>
+    <div class="row align-items-center">
+        <div class="col-md-6 mb-4" data-aos="fade-right" data-aos-delay="100">
+            <div class="process-step">
+                <div class="step-badge">1</div>
+                <div class="step-content">
+                    <h4 class="fw-bold">Register & Verify</h4>
+                    <p class="text-muted">Create your account with basic details and medical information. Quick
+                        verification process.</p>
+                </div>
             </div>
-            <div class="col-md-3 text-center">
-                <div class="step-number">2</div>
-                <h5>Verify</h5>
-                <p>Complete your profile verification</p>
+        </div>
+        <div class="col-md-6 mb-4" data-aos="fade-left" data-aos-delay="100">
+            <div class="process-step">
+                <div class="step-badge">2</div>
+                <div class="step-content">
+                    <h4 class="fw-bold">Get Matched</h4>
+                    <p class="text-muted">AI automatically finds the best matches based on location, blood type, and
+                        availability.</p>
+                </div>
             </div>
-            <div class="col-md-3 text-center">
-                <div class="step-number">3</div>
-                <h5>Donate</h5>
-                <p>Respond to requests and donate blood</p>
+        </div>
+        <div class="col-md-6 mb-4" data-aos="fade-right" data-aos-delay="200">
+            <div class="process-step">
+                <div class="step-badge">3</div>
+                <div class="step-content">
+                    <h4 class="fw-bold">Respond to Requests</h4>
+                    <p class="text-muted">Receive notifications and accept requests that fit your schedule. Track your
+                        route in real-time.</p>
+                </div>
             </div>
-            <div class="col-md-3 text-center">
-                <div class="step-number">4</div>
-                <h5>Save Lives</h5>
-                <p>Make a difference in someone's life</p>
+        </div>
+        <div class="col-md-6 mb-4" data-aos="fade-left" data-aos-delay="200">
+            <div class="process-step">
+                <div class="step-badge">4</div>
+                <div class="step-content">
+                    <h4 class="fw-bold">Save Lives</h4>
+                    <p class="text-muted">Donate blood and make a real difference. Your contribution is automatically
+                        tracked.</p>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
 <!-- Call to Action -->
-<div class="container py-5 text-center">
-    <h2 class="mb-4">{{ translations.join_us }}</h2>
-    <p class="lead mb-4">Be a part of our life-saving community today!</p>
-    <a href="{{ url_for('signup') }}" class="btn btn-danger btn-lg px-4">
-        {{ translations.get_started }}
-    </a>
+<div class="container py-5 text-center" data-aos="zoom-in">
+    <div class="cta-box">
+        <h2 class="mb-4">{{ translations.join_us }}</h2>
+        <p class="lead mb-4">Be a part of our life-saving community today!</p>
+        <a href="{{ url_for('signup') }}" class="btn btn-danger btn-lg px-5 py-3 pulse-button">
+            <i class="fas fa-user-plus me-2"></i>{{ translations.get_started }}
+        </a>
+    </div>
 </div>
 {% endblock %}
 
 {% block styles %}
+<link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
 <style>
-.hero-section {
-    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
-    min-height: 500px;
-    display: flex;
-    align-items: center;
-}
+    /* Navbar Button Hover Styles */
+    .navbar-dark .btn-light:hover {
+        background-color: white !important;
+        color: #dc3545 !important;
+        border-color: white !important;
+    }
 
-.step-number {
-    width: 40px;
-    height: 40px;
-    background-color: #dc3545;
-    color: white;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 auto 1rem;
-    font-weight: bold;
-}
+    .navbar-dark .btn-outline-light:hover {
+        background-color: white !important;
+        color: #dc3545 !important;
+        border-color: white !important;
+    }
 
-.card {
-    transition: transform 0.3s;
-    border: none;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-}
+    .hero-section {
+        background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+        min-height: 500px;
+        display: flex;
+        align-items: center;
+    }
 
-.card:hover {
-    transform: translateY(-5px);
-}
+    .feature-badge {
+        display: inline-block;
+        padding: 8px 20px;
+        background: linear-gradient(135deg, #ffe5e8, #ffd4d8);
+        color: #dc3545;
+        border-radius: 50px;
+        font-size: 13px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+    }
 
-.btn-outline-light:hover {
-    background-color: white;
-    color: #dc3545;
-}
+    .feature-badge-small {
+        display: inline-block;
+        padding: 4px 12px;
+        background: linear-gradient(135deg, #ffe5e8, #ffd4d8);
+        color: #dc3545;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
+        margin-top: 10px;
+    }
 
-.btn-outline-light i {
-    margin-right: 5px;
-}
+    .feature-card {
+        background: white;
+        padding: 30px 25px;
+        border-radius: 20px;
+        text-align: center;
+        transition: all 0.3s ease;
+        border: 1px solid #f0f0f0;
+        height: 100%;
+    }
+
+    .feature-card:hover {
+        transform: translateY(-10px);
+        box-shadow: 0 15px 40px rgba(220, 53, 69, 0.15);
+        border-color: rgba(220, 53, 69, 0.2);
+    }
+
+    .feature-icon-wrapper {
+        width: 75px;
+        height: 75px;
+        border-radius: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto;
+        color: white;
+        box-shadow: 0 10px 25px rgba(220, 53, 69, 0.3);
+    }
+
+    .feature-icon-wrapper.autopulse {
+        background: linear-gradient(135deg, #dc3545, #ff6b6b);
+    }
+
+    .feature-icon-wrapper.rapidaid {
+        background: linear-gradient(135deg, #dc3545, #ff6b6b);
+    }
+
+    .feature-icon-wrapper.pathfinder {
+        background: linear-gradient(135deg, #dc3545, #ff6b6b);
+    }
+
+    .feature-icon-wrapper.linkbridge {
+        background: linear-gradient(135deg, #dc3545, #ff6b6b);
+    }
+
+    .floating-shapes {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        z-index: 0;
+    }
+
+    .shape {
+        position: absolute;
+        border-radius: 50%;
+        opacity: 0.1;
+    }
+
+    .shape-1 {
+        width: 300px;
+        height: 300px;
+        background: linear-gradient(135deg, #dc3545, #ff6b6b);
+        top: -100px;
+        right: 10%;
+        animation: float 15s ease-in-out infinite;
+    }
+
+    .shape-2 {
+        width: 200px;
+        height: 200px;
+        background: linear-gradient(135deg, #ff6b6b, #ff8787);
+        bottom: -50px;
+        left: 15%;
+        animation: float 12s ease-in-out infinite reverse;
+    }
+
+    .shape-3 {
+        width: 150px;
+        height: 150px;
+        background: linear-gradient(135deg, #e63946, #ff5964);
+        top: 50%;
+        left: 5%;
+        animation: float 10s ease-in-out infinite;
+    }
+
+    @keyframes float {
+
+        0%,
+        100% {
+            transform: translateY(0px) translateX(0px);
+        }
+
+        33% {
+            transform: translateY(-30px) translateX(30px);
+        }
+
+        66% {
+            transform: translateY(30px) translateX(-30px);
+        }
+    }
+
+    .smart-feature-card {
+        background: white;
+        padding: 35px;
+        border-radius: 18px;
+        text-align: center;
+        transition: all 0.3s ease;
+        height: 100%;
+        border: 1px solid #f0f0f0;
+    }
+
+    .smart-feature-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 15px 40px rgba(220, 53, 69, 0.15);
+    }
+
+    .smart-icon {
+        width: 70px;
+        height: 70px;
+        background: linear-gradient(135deg, #ffe5e8, #ffd4d8);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 20px;
+    }
+
+    .process-step {
+        display: flex;
+        align-items: start;
+        gap: 20px;
+        padding: 30px;
+        background: white;
+        border-radius: 18px;
+        transition: all 0.3s ease;
+        border: 2px solid #f0f0f0;
+    }
+
+    .process-step:hover {
+        border-color: #dc3545;
+        box-shadow: 0 12px 35px rgba(220, 53, 69, 0.15);
+        transform: translateX(10px);
+    }
+
+    .step-badge {
+        width: 55px;
+        height: 55px;
+        background: linear-gradient(135deg, #dc3545, #ff6b6b);
+        color: white;
+        border-radius: 15px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 26px;
+        font-weight: 700;
+        flex-shrink: 0;
+        box-shadow: 0 8px 20px rgba(220, 53, 69, 0.3);
+    }
+
+    .step-content h4 {
+        color: #2d3748;
+        margin-bottom: 10px;
+    }
+
+    .step-content p {
+        margin: 0;
+        line-height: 1.7;
+    }
+
+    .cta-box {
+        padding: 50px;
+        border-radius: 25px;
+    }
+
+    .pulse-button {
+        transition: all 0.3s ease;
+    }
+
+    .pulse-button:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 15px 40px rgba(220, 53, 69, 0.4);
+    }
+
+    .btn-outline-light:hover {
+        background-color: white;
+        color: #dc3545;
+    }
 </style>
-{% endblock %} 
+{% endblock %}
+
+{% block scripts %}
+<script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+<script>
+    AOS.init({
+        duration: 1000,
+        once: true,
+        offset: 100
+    });
+</script>
+{% endblock %}

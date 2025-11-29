@@ -6,7 +6,7 @@ from agent_orchestrator import orchestrator
 from agents.autopulse_agent import monitor_inventory, predict_shortages
 from agents.rapidaid_agent import check_emergencies, handle_emergency
 from agents.pathfinder_agent import plan_route, update_location, mark_arrival
-from agents.linkbridge_agent import check_nearby_stock_task, coordinate_transfer_task
+from agents.linkbridge_agent import check_nearby_stock_task as check_nearby_stock, coordinate_transfer_task as coordinate_transfer
 from bson import ObjectId
 from utils import admin_required
 import logging
@@ -174,7 +174,7 @@ def trigger_linkbridge():
         if not all(field in data for field in required_fields):
             return jsonify({'error': 'Missing required fields'}), 400
         
-        task = coordinate_transfer_task.delay(
+        task = coordinate_transfer.delay(
             data['hospital_id'],
             data['blood_group'],
             data['units_needed']

@@ -15,6 +15,33 @@
         </div>
     </div>
 
+    <!-- Medical Alert Section (if user is blocked) -->
+    {% if user.get('blocked') %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="alert alert-danger border-danger" role="alert">
+                <h4 class="alert-heading"><i class="fas fa-exclamation-triangle"></i> Important Medical Notice</h4>
+                <hr>
+                <p><strong>Status:</strong> Your account has been temporarily restricted from blood donation.</p>
+                <p><strong>Reason:</strong> Medical screening detected an issue requiring attention</p>
+                <p><strong>Date:</strong> {{ user.get('blocked_at').strftime('%Y-%m-%d %H:%M') if user.get('blocked_at')
+                    else 'N/A' }}</p>
+                {% if user.get('medical_notes') %}
+                <p><strong>Medical Notes:</strong> {{ user.get('medical_notes') }}</p>
+                {% endif %}
+                {% if user.get('medical_report_url') %}
+                <hr>
+                <a href="{{ user.get('medical_report_url') }}" class="btn btn-danger" target="_blank">
+                    <i class="fas fa-file-pdf"></i> View Medical Report
+                </a>
+                <p class="mt-2 mb-0"><small class="text-muted">Please consult with a healthcare professional regarding
+                        this report.</small></p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Main Content Area -->
     <div class="row">
         <div class="col-md-8">
@@ -42,7 +69,7 @@
                 </div>
             </div>
         </div>
-        
+
         <div class="col-md-4">
             <!-- Quick Stats -->
             <div class="card mb-4">
@@ -86,20 +113,20 @@
 
 {% block scripts %}
 <script>
-// Function to load pending requests
-function loadPendingRequests() {
-    fetch('/user/pending_requests')
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                const pendingList = document.getElementById('pending-requests-list');
-                pendingList.innerHTML = '';
-                
-                data.requests.forEach(request => {
-                    const adminDetails = request.admin_details || {};
-                    const requestCard = document.createElement('div');
-                    requestCard.className = 'list-group-item mb-3';
-                    requestCard.innerHTML = `
+    // Function to load pending requests
+    function loadPendingRequests() {
+        fetch('/user/pending_requests')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const pendingList = document.getElementById('pending-requests-list');
+                    pendingList.innerHTML = '';
+
+                    data.requests.forEach(request => {
+                        const adminDetails = request.admin_details || {};
+                        const requestCard = document.createElement('div');
+                        requestCard.className = 'list-group-item mb-3';
+                        requestCard.innerHTML = `
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
                                 <h6 class="mb-1">${adminDetails.name}</h6>
@@ -119,31 +146,31 @@ function loadPendingRequests() {
                             </div>
                         </div>
                     `;
-                    pendingList.appendChild(requestCard);
-                });
-            }
-        })
-        .catch(error => console.error('Error loading pending requests:', error));
-}
+                        pendingList.appendChild(requestCard);
+                    });
+                }
+            })
+            .catch(error => console.error('Error loading pending requests:', error));
+    }
 
-// Function to load request history
-function loadRequestHistory() {
-    fetch('/user/request_history')
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                const historyList = document.getElementById('request-history-list');
-                historyList.innerHTML = '';
-                
-                data.requests.forEach(request => {
-                    const adminDetails = request.admin_details || {};
-                    const statusClass = request.status === 'responded' 
-                        ? (request.response === 'accepted' ? 'text-success' : 'text-danger')
-                        : 'text-warning';
-                    
-                    const requestCard = document.createElement('div');
-                    requestCard.className = 'list-group-item mb-2';
-                    requestCard.innerHTML = `
+    // Function to load request history
+    function loadRequestHistory() {
+        fetch('/user/request_history')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const historyList = document.getElementById('request-history-list');
+                    historyList.innerHTML = '';
+
+                    data.requests.forEach(request => {
+                        const adminDetails = request.admin_details || {};
+                        const statusClass = request.status === 'responded'
+                            ? (request.response === 'accepted' ? 'text-success' : 'text-danger')
+                            : 'text-warning';
+
+                        const requestCard = document.createElement('div');
+                        requestCard.className = 'list-group-item mb-2';
+                        requestCard.innerHTML = `
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
                                 <h6 class="mb-1">${adminDetails.name}</h6>
@@ -156,8 +183,8 @@ function loadRequestHistory() {
                             </div>
                             <div>
                                 <span class="badge ${statusClass}">
-                                    ${request.status === 'pending' ? 'Pending' : 
-                                      request.response === 'accepted' ? 'Accepted' : 'Rejected'}
+                                    ${request.status === 'pending' ? 'Pending' :
+                                request.response === 'accepted' ? 'Accepted' : 'Rejected'}
                                 </span>
                                 ${request.status === 'responded' && request.response === 'accepted' ? `
                                     <br><br>
@@ -168,92 +195,92 @@ function loadRequestHistory() {
                             </div>
                         </div>
                     `;
-                    historyList.appendChild(requestCard);
-                });
-            }
-        })
-        .catch(error => console.error('Error loading request history:', error));
-}
+                        historyList.appendChild(requestCard);
+                    });
+                }
+            })
+            .catch(error => console.error('Error loading request history:', error));
+    }
 
-// Function to load user stats
-function loadUserStats() {
-    fetch('/user/stats')
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                document.getElementById('total-donations').textContent = data.stats.total_donations;
-                document.getElementById('last-donation').textContent = data.stats.last_donation || 'Never';
-                document.getElementById('next-eligible').textContent = data.stats.next_eligible || 'Now';
-            }
-        })
-        .catch(error => console.error('Error loading user stats:', error));
-}
+    // Function to load user stats
+    function loadUserStats() {
+        fetch('/user/stats')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('total-donations').textContent = data.stats.total_donations;
+                    document.getElementById('last-donation').textContent = data.stats.last_donation || 'Never';
+                    document.getElementById('next-eligible').textContent = data.stats.next_eligible || 'Now';
+                }
+            })
+            .catch(error => console.error('Error loading user stats:', error));
+    }
 
-// Function to load upcoming camps
-function loadUpcomingCamps() {
-    fetch('/user/upcoming_camps')
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                const campsList = document.getElementById('upcoming-camps');
-                campsList.innerHTML = '';
-                
-                data.camps.forEach(camp => {
-                    const campCard = document.createElement('div');
-                    campCard.className = 'list-group-item';
-                    campCard.innerHTML = `
+    // Function to load upcoming camps
+    function loadUpcomingCamps() {
+        fetch('/user/upcoming_camps')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const campsList = document.getElementById('upcoming-camps');
+                    campsList.innerHTML = '';
+
+                    data.camps.forEach(camp => {
+                        const campCard = document.createElement('div');
+                        campCard.className = 'list-group-item';
+                        campCard.innerHTML = `
                         <h6 class="mb-1">${camp.name}</h6>
                         <p class="mb-1">${camp.date}</p>
                         <p class="mb-1">${camp.location}</p>
                         <a href="#" class="btn btn-danger btn-sm">View Details</a>
                     `;
-                    campsList.appendChild(campCard);
-                });
-            }
-        })
-        .catch(error => console.error('Error loading upcoming camps:', error));
-}
+                        campsList.appendChild(campCard);
+                    });
+                }
+            })
+            .catch(error => console.error('Error loading upcoming camps:', error));
+    }
 
-// Function to respond to a request
-function respondToRequest(requestId, response) {
-    fetch('/user/respond_to_request', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            request_id: requestId,
-            response: response
+    // Function to respond to a request
+    function respondToRequest(requestId, response) {
+        fetch('/user/respond_to_request', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                request_id: requestId,
+                response: response
+            })
         })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            // Reload both pending requests and history
-            loadPendingRequests();
-            loadRequestHistory();
-            
-            // Show success message
-            const message = response === 'accepted' 
-                ? 'Thank you for accepting the blood donation request!'
-                : 'You have rejected the blood donation request.';
-            alert(message);
-        } else {
-            alert('Error responding to request: ' + data.error);
-        }
-    })
-    .catch(error => {
-        console.error('Error responding to request:', error);
-        alert('Error responding to request. Please try again.');
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Reload both pending requests and history
+                    loadPendingRequests();
+                    loadRequestHistory();
+
+                    // Show success message
+                    const message = response === 'accepted'
+                        ? 'Thank you for accepting the blood donation request!'
+                        : 'You have rejected the blood donation request.';
+                    alert(message);
+                } else {
+                    alert('Error responding to request: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error responding to request:', error);
+                alert('Error responding to request. Please try again.');
+            });
+    }
+
+    // Load data when page loads
+    document.addEventListener('DOMContentLoaded', function () {
+        loadPendingRequests();
+        loadRequestHistory();
+        loadUserStats();
+        loadUpcomingCamps();
     });
-}
-
-// Load data when page loads
-document.addEventListener('DOMContentLoaded', function() {
-    loadPendingRequests();
-    loadRequestHistory();
-    loadUserStats();
-    loadUpcomingCamps();
-});
 </script>
-{% endblock %} 
+{% endblock %}

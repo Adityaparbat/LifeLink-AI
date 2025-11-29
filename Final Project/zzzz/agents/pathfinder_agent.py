@@ -24,21 +24,25 @@ class PathFinderAgent(BaseAgent):
     def execute(self, donor_id: str, hospital_id: str, request_id: str):
         """Plan route for donor to hospital"""
         try:
+            print(f"[PathFinder] Executing for Request: {request_id}, Donor: {donor_id}, Hospital: {hospital_id}")
             donor = self.db.users.find_one({'_id': ObjectId(donor_id)})
             hospital = self.db.admins.find_one({'_id': ObjectId(hospital_id)})
             
             if not donor or not hospital:
+                print(f"[PathFinder] Error: Donor or hospital not found. Donor: {donor}, Hospital: {hospital}")
                 return {'success': False, 'error': 'Donor or hospital not found'}
             
             # Get locations
             donor_location = donor.get('location', {}).get('coordinates', [0, 0])
             hospital_location = hospital.get('location', {}).get('coordinates', [0, 0])
+            print(f"[PathFinder] Locations - Donor: {donor_location}, Hospital: {hospital_location}")
             
             # Calculate route
             route = self._calculate_route(
                 donor_location[1], donor_location[0],  # lat, lon
                 hospital_location[1], hospital_location[0]
             )
+            print(f"[PathFinder] Calculated Route: {route}")
             
             # Store route information
             route_data = {
@@ -51,6 +55,7 @@ class PathFinderAgent(BaseAgent):
                 'estimated_arrival': self._estimate_arrival_time(route),
                 'last_updated': datetime.now(timezone.utc)
             }
+            print(f"[PathFinder] Route Data to Save: {route_data}")
             
             # Update or insert route
             self.db.donor_routes.update_one(
@@ -75,14 +80,19 @@ class PathFinderAgent(BaseAgent):
             }
         except Exception as e:
             self.logger.error(f"Error planning route: {str(e)}")
+            print(f"[PathFinder] Exception in execute: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return {'success': False, 'error': str(e)}
     
     def _calculate_route(self, start_lat: float, start_lon: float,
                         end_lat: float, end_lon: float):
         """Calculate optimal route between two points"""
         try:
+            print(f"[PathFinder] Calculating route from ({start_lat}, {start_lon}) to ({end_lat}, {end_lon})")
             # Try Google Maps API first
             if self.google_maps_api_key:
+                print("[PathFinder] Using Google Maps API")
                 route = self._get_google_maps_route(
                     start_lat, start_lon, end_lat, end_lon
                 )
@@ -91,12 +101,14 @@ class PathFinderAgent(BaseAgent):
             
             # Fallback to OpenRouteService
             if self.openroute_api_key:
+                print("[PathFinder] Using OpenRouteService API")
                 route = self._get_openroute_route(
                     start_lat, start_lon, end_lat, end_lon
                 )
                 if route:
                     return route
             
+            print("[PathFinder] Using Fallback (Haversine)")
             # Fallback: Use Haversine distance and estimate
             distance = self._haversine_distance(start_lat, start_lon, end_lat, end_lon)
             estimated_time = distance * 2  # Assume 30 km/h average speed
@@ -112,6 +124,7 @@ class PathFinderAgent(BaseAgent):
             }
         except Exception as e:
             self.logger.error(f"Error calculating route: {str(e)}")
+            print(f"[PathFinder] Exception in _calculate_route: {str(e)}")
             # Return basic route
             distance = self._haversine_distance(start_lat, start_lon, end_lat, end_lon)
             return {

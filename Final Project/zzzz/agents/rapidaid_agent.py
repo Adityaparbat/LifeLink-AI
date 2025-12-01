@@ -16,6 +16,13 @@ import json
 import time
 import re
 
+# Observability integration
+try:
+    from observability import observability
+    OBSERVABILITY_AVAILABLE = True
+except ImportError:
+    OBSERVABILITY_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 class RapidAidAgent(BaseAgent):
@@ -41,6 +48,17 @@ class RapidAidAgent(BaseAgent):
     
     def execute(self, emergency_data: dict):
         """Handle emergency situation"""
+        start_time = time.time()
+        trace_id = None
+        
+        # Log with observability if available
+        if OBSERVABILITY_AVAILABLE:
+            trace_id = observability.log_agent_start('RapidAid', f"emergency_{emergency_data.get('hospital_id', 'unknown')}", {
+                'emergency_type': emergency_data.get('type', 'manual'),
+                'blood_group': emergency_data.get('blood_group'),
+                'units_needed': emergency_data.get('units_needed')
+            })
+        
         try:
             emergency_type = emergency_data.get('type', 'manual')
             handled_emergencies = []
@@ -69,12 +87,24 @@ class RapidAidAgent(BaseAgent):
                     handled_emergencies.append(handled_payload)
             
             success = len(handled_emergencies) > 0
-            return {
+            result = {
                 'success': success,
                 'handled_emergencies': handled_emergencies
             }
+            
+            # Log completion
+            if OBSERVABILITY_AVAILABLE and trace_id:
+                duration = time.time() - start_time
+                observability.log_agent_end('RapidAid', trace_id, result, duration)
+            
+            return result
         except Exception as e:
             self.logger.error(f"Error handling emergency: {str(e)}")
+            
+            # Log error
+            if OBSERVABILITY_AVAILABLE and trace_id:
+                observability.log_error('RapidAid', trace_id, e, {'emergency_data': emergency_data})
+            
             return {'success': False, 'error': str(e)}
     
     def _handle_emergency(self, emergency: dict):

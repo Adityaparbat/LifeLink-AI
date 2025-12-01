@@ -7,6 +7,20 @@ from typing import Any, Dict, List, Optional
 from bson import ObjectId
 import google.generativeai as genai
 
+# ADK Integration imports
+try:
+    from mcp_tools import MongoDBMCPTools
+    MCP_TOOLS_AVAILABLE = True
+except ImportError:
+    MCP_TOOLS_AVAILABLE = False
+    logger.warning("MCP tools not available, using direct MongoDB queries")
+
+try:
+    from observability import observability
+    OBSERVABILITY_AVAILABLE = True
+except ImportError:
+    OBSERVABILITY_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 
@@ -40,6 +54,20 @@ class LifeBotAgent:
         self.orchestrator = orchestrator
         self.agents_enabled = agents_enabled
 
+        # Initialize MCP tools if available
+        if MCP_TOOLS_AVAILABLE:
+            try:
+                self.mcp_tools = MongoDBMCPTools(db, admins, users, notifications)
+                self.use_mcp_tools = True
+                logger.info("LifeBot: MCP tools initialized")
+            except Exception as e:
+                logger.warning(f"LifeBot: Failed to initialize MCP tools: {e}")
+                self.mcp_tools = None
+                self.use_mcp_tools = False
+        else:
+            self.mcp_tools = None
+            self.use_mcp_tools = False
+
         self.model = None
         model_name = os.getenv('LIFEBOT_MODEL', 'gemini-1.5-flash')
         try:
@@ -55,14 +83,98 @@ class LifeBotAgent:
     # --------------------
 
     def describe_stock(self, blood_group: str) -> Dict[str, Any]:
+        # Log with observability if available
+        import time
+        start_time = time.time()
+        trace_id = None
+        if OBSERVABILITY_AVAILABLE:
+            trace_id = observability.log_agent_start('LifeBot', f"admin_{self.admin_id}", {
+                'task': 'describe_stock',
+                'blood_group': blood_group
+            })
+            observability.log_tool_call('LifeBot', trace_id, 'describe_stock', {'blood_group': blood_group})
+
         blood_group = (blood_group or '').upper()
         if blood_group not in self.BLOOD_GROUPS:
-            return self._error_payload(
+            result = self._error_payload(
                 'stock_lookup',
                 f"Unsupported blood group '{blood_group}'.",
-                tools=['MCP.MongoAdmins.read'],
+                tools=['MCP.get_blood_stock'],
             )
+            if OBSERVABILITY_AVAILABLE and trace_id:
+                observability.log_agent_end('LifeBot', trace_id, result, 0)
+            return result
 
+        # Use MCP tool if available, otherwise fallback to direct query
+        if self.use_mcp_tools and self.mcp_tools:
+            try:
+                mcp_result = self.mcp_tools.get_blood_stock(blood_group)
+                if OBSERVABILITY_AVAILABLE and trace_id:
+                    observability.log_tool_call('LifeBot', trace_id, 'MCP.get_blood_stock', 
+                                               {'blood_group': blood_group}, mcp_result)
+                
+                # Convert MCP result to expected format
+                rows = []
+                for hospital in mcp_result.get('hospitals', []):
+                    rows.append({
+                        'hospital_name': hospital.get('hospital_name', 'Unknown'),
+                        'hospital_id': hospital.get('hospital_id', ''),
+                        'admin_id': hospital.get('hospital_id', ''),
+                        'status': hospital.get('status', 'unknown'),
+                        'units': hospital.get('units', 0),
+                        'last_updated': None,  # MCP tool doesn't return this
+                    })
+                total_units = mcp_result.get('total_units', 0)
+                low_supply = mcp_result.get('low_supply_count', 0)
+            except Exception as e:
+                logger.warning(f"MCP tool failed, falling back to direct query: {e}")
+                # Fallback to direct query
+                rows, total_units, low_supply = self._query_stock_direct(blood_group)
+        else:
+            # Direct MongoDB query (backward compatibility)
+            rows, total_units, low_supply = self._query_stock_direct(blood_group)
+
+        context = {
+            'blood_group': blood_group,
+            'total_units': total_units,
+            'low_supply_sites': low_supply,
+            'rows': rows[:8],
+        }
+
+        explanation = self._explain(
+            task='stock_lookup',
+            context=context,
+            fallback=(
+                f"Located {len(rows)} hospitals. Total units of {blood_group}: {total_units}. "
+                f"{low_supply} site(s) currently have zero stock."
+            ),
+        )
+
+        result = {
+            'ok': True,
+            'task': 'stock_lookup',
+            'data': {
+                'blood_group': blood_group,
+                'total_units': total_units,
+                'rows': rows,
+                'low_supply_sites': low_supply,
+            },
+            'explanation': explanation,
+            'tool_invocations': self._tool_trace(
+                'MCP.get_blood_stock' if self.use_mcp_tools else 'MCP.MongoAdmins.read',
+                'Gemini.Explain' if self.model else None,
+            ),
+        }
+        
+        # Log completion with observability
+        if OBSERVABILITY_AVAILABLE and trace_id:
+            duration = time.time() - start_time
+            observability.log_agent_end('LifeBot', trace_id, result, duration)
+        
+        return result
+    
+    def _query_stock_direct(self, blood_group: str):
+        """Fallback method for direct MongoDB query"""
         rows: List[Dict[str, Any]] = []
         total_units = 0
         low_supply = 0
@@ -93,47 +205,93 @@ class LifeBotAgent:
             })
 
         rows.sort(key=lambda item: item['units'], reverse=True)
+        return rows, total_units, low_supply
+
+    def get_accepted_donors(self, request_id: str) -> Dict[str, Any]:
+        # Log with observability if available
+        import time
+        start_time = time.time()
+        trace_id = None
+        if OBSERVABILITY_AVAILABLE:
+            trace_id = observability.log_agent_start('LifeBot', f"admin_{self.admin_id}", {
+                'task': 'get_accepted_donors',
+                'request_id': request_id
+            })
+
+        if not request_id:
+            result = self._error_payload(
+                'accepted_donors',
+                'Request ID is required.',
+                tools=['MCP.get_accepted_donors_for_request'],
+            )
+            if OBSERVABILITY_AVAILABLE and trace_id:
+                observability.log_agent_end('LifeBot', trace_id, result, 0)
+            return result
+
+        # Use MCP tool if available
+        if self.use_mcp_tools and self.mcp_tools:
+            try:
+                mcp_result = self.mcp_tools.get_accepted_donors_for_request(request_id)
+                if OBSERVABILITY_AVAILABLE and trace_id:
+                    observability.log_tool_call('LifeBot', trace_id, 'MCP.get_accepted_donors_for_request',
+                                               {'request_id': request_id}, mcp_result)
+                
+                # Convert MCP result to expected format
+                donors = []
+                for donor in mcp_result.get('donors', []):
+                    donors.append({
+                        'user_id': donor.get('user_id'),
+                        'name': donor.get('name', 'Unknown'),
+                        'blood_group': donor.get('blood_group'),
+                        'phone': donor.get('phone', 'N/A'),
+                        'email': donor.get('email', 'N/A'),
+                        'response_time': donor.get('response_time'),
+                        'distance': donor.get('distance'),
+                        'request_id': request_id,
+                    })
+            except Exception as e:
+                logger.warning(f"MCP tool failed, falling back to direct query: {e}")
+                donors = self._query_accepted_donors_direct(request_id)
+        else:
+            # Direct MongoDB query (backward compatibility)
+            donors = self._query_accepted_donors_direct(request_id)
 
         context = {
-            'blood_group': blood_group,
-            'total_units': total_units,
-            'low_supply_sites': low_supply,
-            'rows': rows[:8],
+            'request_id': request_id,
+            'count': len(donors),
+            'donors': donors[:6],
         }
 
         explanation = self._explain(
-            task='stock_lookup',
+            task='accepted_donors',
             context=context,
-            fallback=(
-                f"Located {len(rows)} hospitals. Total units of {blood_group}: {total_units}. "
-                f"{low_supply} site(s) currently have zero stock."
-            ),
+            fallback=f"Found {len(donors)} accepted donor(s) for request {request_id}.",
         )
 
-        return {
+        result = {
             'ok': True,
-            'task': 'stock_lookup',
+            'task': 'accepted_donors',
             'data': {
-                'blood_group': blood_group,
-                'total_units': total_units,
-                'rows': rows,
-                'low_supply_sites': low_supply,
+                'request_id': request_id,
+                'donors': donors,
+                'count': len(donors),
             },
             'explanation': explanation,
             'tool_invocations': self._tool_trace(
-                'MCP.MongoAdmins.read',
+                'MCP.get_accepted_donors_for_request' if self.use_mcp_tools else 'MCP.Notifications.read',
                 'Gemini.Explain' if self.model else None,
             ),
         }
-
-    def get_accepted_donors(self, request_id: str) -> Dict[str, Any]:
-        if not request_id:
-            return self._error_payload(
-                'accepted_donors',
-                'Request ID is required.',
-                tools=['MCP.Notifications.read'],
-            )
-
+        
+        # Log completion
+        if OBSERVABILITY_AVAILABLE and trace_id:
+            duration = time.time() - start_time
+            observability.log_agent_end('LifeBot', trace_id, result, duration)
+        
+        return result
+    
+    def _query_accepted_donors_direct(self, request_id: str):
+        """Fallback method for direct MongoDB query"""
         accepted_requests = list(self.notifications.find({
             'request_id': request_id,
             'status': 'responded',
@@ -156,37 +314,82 @@ class LifeBotAgent:
                 'distance': req.get('data', {}).get('distance'),
                 'request_id': request_id,
             })
+        return donors
+
+    def get_successful_donations(self, limit: int = 10) -> Dict[str, Any]:
+        # Log with observability if available
+        import time
+        start_time = time.time()
+        trace_id = None
+        if OBSERVABILITY_AVAILABLE:
+            trace_id = observability.log_agent_start('LifeBot', f"admin_{self.admin_id}", {
+                'task': 'get_successful_donations',
+                'limit': limit
+            })
+
+        limit = max(1, min(limit or 10, 25))
+        
+        # Use MCP tool if available
+        if self.use_mcp_tools and self.mcp_tools:
+            try:
+                mcp_result = self.mcp_tools.get_successful_donations(limit)
+                if OBSERVABILITY_AVAILABLE and trace_id:
+                    observability.log_tool_call('LifeBot', trace_id, 'MCP.get_successful_donations',
+                                               {'limit': limit}, mcp_result)
+                
+                # Convert MCP result to expected format
+                timeline = []
+                for record in mcp_result.get('records', []):
+                    timeline.append({
+                        'request_id': record.get('request_id'),
+                        'status': record.get('status'),
+                        'completed_at': record.get('completed_at'),
+                        'donor_name': record.get('donor_name', 'Unknown'),
+                        'blood_group': record.get('blood_group'),
+                        'distance_km': record.get('distance_km'),
+                        'hospital_id': record.get('hospital_id'),
+                    })
+            except Exception as e:
+                logger.warning(f"MCP tool failed, falling back to direct query: {e}")
+                timeline = self._query_successful_donations_direct(limit)
+        else:
+            # Direct MongoDB query (backward compatibility)
+            timeline = self._query_successful_donations_direct(limit)
 
         context = {
-            'request_id': request_id,
-            'count': len(donors),
-            'donors': donors[:6],
+            'count': len(timeline),
+            'latest': timeline[:5],
         }
 
         explanation = self._explain(
-            task='accepted_donors',
+            task='successful_donations',
             context=context,
-            fallback=f"Found {len(donors)} accepted donor(s) for request {request_id}.",
+            fallback=f"Compiled {len(timeline)} recently completed donor routes.",
         )
 
-        return {
+        result = {
             'ok': True,
-            'task': 'accepted_donors',
+            'task': 'successful_donations',
             'data': {
-                'request_id': request_id,
-                'donors': donors,
-                'count': len(donors),
+                'records': timeline,
+                'count': len(timeline),
             },
             'explanation': explanation,
             'tool_invocations': self._tool_trace(
-                'MCP.Notifications.read',
-                'MCP.Users.read',
+                'MCP.get_successful_donations' if self.use_mcp_tools else 'MCP.DonorRoutes.read',
                 'Gemini.Explain' if self.model else None,
             ),
         }
-
-    def get_successful_donations(self, limit: int = 10) -> Dict[str, Any]:
-        limit = max(1, min(limit or 10, 25))
+        
+        # Log completion
+        if OBSERVABILITY_AVAILABLE and trace_id:
+            duration = time.time() - start_time
+            observability.log_agent_end('LifeBot', trace_id, result, duration)
+        
+        return result
+    
+    def _query_successful_donations_direct(self, limit: int):
+        """Fallback method for direct MongoDB query"""
         routes = list(
             self.db.donor_routes.find(
                 {'status': {'$in': ['completed', 'success', 'completed_by_agent']}}
@@ -213,31 +416,7 @@ class LifeBotAgent:
                 'distance_km': route.get('distance_km'),
                 'hospital_id': route.get('hospital_id'),
             })
-
-        context = {
-            'count': len(timeline),
-            'latest': timeline[:5],
-        }
-
-        explanation = self._explain(
-            task='successful_donations',
-            context=context,
-            fallback=f"Compiled {len(timeline)} recently completed donor routes.",
-        )
-
-        return {
-            'ok': True,
-            'task': 'successful_donations',
-            'data': {
-                'records': timeline,
-                'count': len(timeline),
-            },
-            'explanation': explanation,
-            'tool_invocations': self._tool_trace(
-                'MCP.DonorRoutes.read',
-                'Gemini.Explain' if self.model else None,
-            ),
-        }
+        return timeline
 
     def handle_emergency(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         required_fields = ['hospital_id', 'blood_group', 'units_needed']

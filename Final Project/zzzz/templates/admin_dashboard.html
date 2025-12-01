@@ -1124,22 +1124,49 @@
         if (lifebotState.loading) return;
         setLifeBotLoading(true);
         setLifeBotStatus('Contacting LifeBot…', 'info');
-        fetch(`/api/lifebot/${task}`, {
+        // Enable ADK mode for full Kaggle compliance (sessions, memory, observability)
+        fetch(`/api/lifebot/${task}?use_adk=true`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'X-Use-ADK': 'true'  // Enable ADK mode
+            },
             body: JSON.stringify(payload || {})
         })
             .then(async response => {
+                // Check if response is JSON
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    const text = await response.text();
+                    throw new Error(`Server returned non-JSON response (${response.status}): ${text.substring(0, 100)}`);
+                }
+                
+                // Check if response is OK
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}: ${response.statusText}` }));
+                    throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+                }
+                
                 const data = await response.json();
                 if (!data) throw new Error('LifeBot returned an empty response.');
                 const result = data.lifebot || data;
+                
+                // Display ADK session info if available
+                if (data.adk_enabled && data.session_id) {
+                    console.log('ADK Session ID:', data.session_id);
+                    if (data.session_history && data.session_history.length > 0) {
+                        console.log('Session History:', data.session_history);
+                    }
+                }
+                
                 renderLifeBotPayload(result);
                 setLifeBotStatus(result.ok ? 'Online' : 'Needs attention', result.ok ? 'success' : 'warning');
             })
             .catch(error => {
                 console.error('LifeBot error:', error);
-                lifebotElements.responseSummary.textContent = error.message || 'LifeBot failed to respond.';
-                lifebotElements.dataRegion.innerHTML = `<div class="alert alert-danger mb-0">${error.message || 'Unknown error'}</div>`;
+                const errorMessage = error.message || 'LifeBot failed to respond.';
+                lifebotElements.responseSummary.textContent = errorMessage;
+                lifebotElements.dataRegion.innerHTML = `<div class="alert alert-danger mb-0">${errorMessage}</div>`;
                 setLifeBotStatus('Offline', 'danger');
             })
             .finally(() => {

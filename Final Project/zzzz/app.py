@@ -205,11 +205,37 @@ except Exception as e:
 # LifeBot helper
 # ------------------------------------------------------------------
 
-def build_lifebot_agent():
+def build_lifebot_agent(use_adk=False):
     """
     Instantiate the LifeBot explainable assistant with current context.
+    
+    Args:
+        use_adk: If True, returns ADK-wrapped agent with session/memory support
     """
     admin_id = session.get('admin')
+    
+    # ADK Integration - use ADK wrapper if requested
+    if use_adk:
+        try:
+            from adk_integration import adk_lifebot, session_service, memory_bank
+            
+            # Initialize ADK agent if not already initialized
+            if not adk_lifebot.lifebot:
+                adk_lifebot.initialize(
+                    db=db,
+                    admins=admins,
+                    users=users,
+                    notifications=notifications,
+                    orchestrator=orchestrator if AGENTS_ENABLED else None,
+                    agents_enabled=AGENTS_ENABLED,
+                )
+            
+            return adk_lifebot
+        except ImportError:
+            logger.warning("ADK integration not available, using standard LifeBotAgent")
+            # Fallback to standard agent
+    
+    # Standard LifeBotAgent (backward compatible)
     return LifeBotAgent(
         db=db,
         admins=admins,
@@ -2491,24 +2517,159 @@ def lifebot_context():
 def lifebot_task(task):
     """
     Execute one of LifeBot's explainable tasks via Google ADK powered agent.
+    Supports both standard LifeBotAgent and ADK-wrapped version.
     """
     payload = request.get_json(silent=True) or {}
-    agent = build_lifebot_agent()
     task = (task or '').lower()
+    
+    # Check if ADK integration is requested (via query param or header)
+    use_adk = request.args.get('use_adk', 'false').lower() == 'true' or \
+              request.headers.get('X-Use-ADK', '').lower() == 'true'
+    
+    # Try ADK integration if available and requested
+    if use_adk:
+        try:
+            from adk_integration import adk_lifebot, session_service, memory_bank
+            
+            # Initialize ADK agent if needed
+            if not adk_lifebot.lifebot:
+                adk_lifebot.initialize(
+                    db=db,
+                    admins=admins,
+                    users=users,
+                    notifications=notifications,
+                    orchestrator=orchestrator if AGENTS_ENABLED else None,
+                    agents_enabled=AGENTS_ENABLED,
+                )
+            
+            # Get or create session
+            session_id = session.get('lifebot_session_id') or f"session_{datetime.now(timezone.utc).timestamp()}"
+            session['lifebot_session_id'] = session_id
+            
+            # Special handling for emergency - call directly, don't route through query parser
+            if task == 'handle-emergency':
+                # For emergency, call handle_emergency directly with payload
+                if not adk_lifebot.lifebot:
+                    adk_lifebot.initialize(
+                        db=db,
+                        admins=admins,
+                        users=users,
+                        notifications=notifications,
+                        orchestrator=orchestrator if AGENTS_ENABLED else None,
+                        agents_enabled=AGENTS_ENABLED,
+                    )
+                
+                # Call handle_emergency directly
+                result = adk_lifebot.lifebot.handle_emergency(payload)
+                
+                # Add to session for observability
+                session_service.add_message(session_id, 'user', f"Handle emergency: {payload.get('blood_group')} at {payload.get('hospital_id')}")
+                session_service.add_message(session_id, 'assistant', result.get('explanation', 'Emergency handled'))
+                
+                # Store in memory
+                memory_bank.store('LifeBot', 'emergency_handled', {
+                    'hospital_id': payload.get('hospital_id'),
+                    'blood_group': payload.get('blood_group'),
+                    'units_needed': payload.get('units_needed'),
+                    'success': result.get('ok', False)
+                })
+            else:
+                # Convert other tasks to natural language query
+                query_map = {
+                    'stock': f"Show me stock for {payload.get('blood_group', 'O+')} blood group",
+                    'accepted-donors': f"Get accepted donors for request {payload.get('request_id', '')}",
+                    'successful-donations': f"Show me {payload.get('limit', 10)} successful donations",
+                }
+                
+                query = query_map.get(task, '')
+                if not query:
+                    return jsonify({'success': False, 'error': 'Unknown LifeBot task'}), 400
+                
+                # Run ADK agent (now synchronous)
+                try:
+                    adk_result = adk_lifebot.run(query, session_id=session_id)
+                    result = adk_result.get('result', {})
+                except Exception as e:
+                    logger.error(f"ADK agent error: {e}")
+                    import traceback
+                    logger.error(traceback.format_exc())
+                    # Fallback to standard agent
+                    use_adk = False
+            
+            # Return ADK response
+            if use_adk:
+                # Get session history
+                session_history = []
+                if task == 'handle-emergency':
+                    # Get session history for emergency
+                    session_obj = session_service.get_session(session_id)
+                    if session_obj:
+                        session_history = session_obj.get('messages', [])[-3:]
+                else:
+                    # Get session history from ADK result
+                    session_history = adk_result.get('session_history', [])[-3:]
+                
+                return jsonify({
+                    'success': result.get('ok', False),
+                    'lifebot': result,
+                    'adk_enabled': True,
+                    'session_id': session_id,
+                    'session_history': session_history,
+                }), 200 if result.get('ok') else 400
+        except Exception as e:
+            logger.error(f"ADK agent error: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            # Return error as JSON instead of falling back
+            return jsonify({
+                'success': False,
+                'error': f'ADK agent error: {str(e)}',
+                'lifebot': {
+                    'ok': False,
+                    'error': str(e),
+                    'task': task
+                },
+                'adk_enabled': True
+            }), 500
+        except ImportError:
+            logger.warning("ADK integration not available, using standard LifeBotAgent")
+            use_adk = False
+    
+    # Standard LifeBotAgent (backward compatible)
+    agent = build_lifebot_agent(use_adk=False)
+    
+    try:
+        if task == 'stock':
+            result = agent.describe_stock(payload.get('blood_group'))
+        elif task == 'accepted-donors':
+            result = agent.get_accepted_donors(payload.get('request_id'))
+        elif task == 'successful-donations':
+            result = agent.get_successful_donations(payload.get('limit'))
+        elif task == 'handle-emergency':
+            result = agent.handle_emergency(payload)
+        else:
+            return jsonify({'success': False, 'error': 'Unknown LifeBot task'}), 400
 
-    if task == 'stock':
-        result = agent.describe_stock(payload.get('blood_group'))
-    elif task == 'accepted-donors':
-        result = agent.get_accepted_donors(payload.get('request_id'))
-    elif task == 'successful-donations':
-        result = agent.get_successful_donations(payload.get('limit'))
-    elif task == 'handle-emergency':
-        result = agent.handle_emergency(payload)
-    else:
-        return jsonify({'success': False, 'error': 'Unknown LifeBot task'}), 400
-
-    status_code = 200 if result.get('ok') else 400
-    return jsonify({'success': result.get('ok'), 'lifebot': result}), status_code
+        status_code = 200 if result.get('ok') else 400
+        return jsonify({
+            'success': result.get('ok'),
+            'lifebot': result,
+            'adk_enabled': False
+        }), status_code
+    except Exception as e:
+        logger.error(f"LifeBot task error ({task}): {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'error': f'LifeBot error: {str(e)}',
+            'lifebot': {
+                'ok': False,
+                'error': str(e),
+                'task': task
+            },
+            'adk_enabled': False
+        }), 500
 
 # Update the request stats route to include selection status
 @app.route('/admin/request_stats', methods=['GET'])

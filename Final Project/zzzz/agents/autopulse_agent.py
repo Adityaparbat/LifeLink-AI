@@ -10,6 +10,14 @@ import requests
 import os
 from twilio.rest import Client
 import logging
+import time
+
+# Observability integration
+try:
+    from observability import observability
+    OBSERVABILITY_AVAILABLE = True
+except ImportError:
+    OBSERVABILITY_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -40,10 +48,33 @@ class AutoPulseAgent(BaseAgent):
     
     def execute(self, admin_id: str = None):
         """Main execution - monitor all hospitals or specific one"""
-        if admin_id:
-            return self._monitor_hospital(admin_id)
-        else:
-            return self._monitor_all_hospitals()
+        start_time = time.time()
+        trace_id = None
+        
+        # Log with observability if available
+        if OBSERVABILITY_AVAILABLE:
+            trace_id = observability.log_agent_start('AutoPulse', f"admin_{admin_id or 'all'}", {
+                'admin_id': admin_id,
+                'task': 'inventory_monitoring'
+            })
+        
+        try:
+            if admin_id:
+                result = self._monitor_hospital(admin_id)
+            else:
+                result = self._monitor_all_hospitals()
+            
+            # Log completion
+            if OBSERVABILITY_AVAILABLE and trace_id:
+                duration = time.time() - start_time
+                observability.log_agent_end('AutoPulse', trace_id, {'success': True, 'result_count': len(result) if isinstance(result, list) else 1}, duration)
+            
+            return result
+        except Exception as e:
+            # Log error
+            if OBSERVABILITY_AVAILABLE and trace_id:
+                observability.log_error('AutoPulse', trace_id, e, {'admin_id': admin_id})
+            raise
     
     def _monitor_all_hospitals(self):
         """Monitor inventory for all active hospitals"""
